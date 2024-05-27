@@ -1,0 +1,110 @@
+Holograms:
+  HealthBar:
+    # The offset based on the entity's height, the higher number the more distance between hologram and entity's head
+    HeightOffset: 1.0
+    # The duration of the hologram in ticks (20 ticks = 1 second)
+    HologramDuration: 100
+    # Update rate of the hologram (location, health) in ticks
+    UpdateRate: 2
+    # Lines to display in the health bar hologram
+    Lines:
+      - "<name>"          # The entity's name
+      - "<health>/<max_health>"  # Current health and maximum health
+      - "<bar>"           # Health bar graphical representation
+    Bar:
+      # Prefix for the health bar
+      Prefix: "[ "
+      # Suffix for the health bar
+      Suffix: " ]"
+      # Character used to fill the empty health bar
+      Filler: "|"
+      # Character used to fill the health bar
+      HealthFiller: "|"
+      # Character used to separate between health and normal filler
+      SeparateFiller: ""
+      # Width of the health bar in characters
+      Width: 20
+      # Color code for the filler part of the health bar
+      FillerColor: "&f"
+      # Color code for the health part of the health bar
+      HealthColor: "&a"
+  DamageIndicator:
+    # Update rate of the animation
+    UpdateRate: 1
+    # Height offset from the entity
+    HeightOffset: 0.0
+    # The initial Y speed of the animation that goes up before going down
+    InitialYSpeed: 0.1
+    # How fast the hologram is falling after Y animation ends
+    Gravity: 0.05
+    # Speed of the horizontal animation
+    AnimationSpeed: 0.1
+    Damage:
+      # Prefix for the damage
+      Prefix: "&c🗡 "
+      #Suffix for the damage
+      Suffix: ""
+      # Color code for the damage
+      Color: "&f"
+      # Prefix for the critical damage
+      CriticalPrefix: "&6✦ "
+      #Suffix for the critical damage
+      CriticalSuffix: ""
+      # Color code for the critical damage
+      CriticalColor: "&4"
+    Healing:
+      # Prefix for the healing
+      Prefix: "+"
+      #Suffix for the healing
+      Suffix: ""
+      # Color code for the healing
+      Color: "&a"
+    #Other damage types, like MMOItems magic damage, etc.
+    Others:
+      # Prefix for the damage
+      Prefix: "&d🗡 "
+      #Suffix for the damage
+      Suffix: ""
+      # Color code for the damage
+      Color: "&f"
+      # Prefix for the critical damage
+      CriticalPrefix: "&6✦ "
+      #Suffix for the critical damage
+      CriticalSuffix: ""
+      # Color code for the critical damage
+      CriticalColor: "&5"
+
+#Text Replacement (ONLY APPLIED TO ENTITY'S NAME AND DAMAGE/HEAL NUMBERS)
+# these settings does not apply to MythicMobs's entity name
+# if you wanted to change the health bar use config above
+Replacement:
+  1: '1'
+  2: '2'
+  3: '3'
+  4: '4'
+  5: '5'
+  6: '6'
+  7: '7'
+  8: '8'
+  9: '9'
+  0: '0'
+  #add more values as you needed.
+
+#Custom Health bar for each MythicMobs (default is used when not specified)
+MythicMobs:
+  SkeletalKnight:
+    HeightOffset: 1.0
+    HologramDuration: 100
+    Lines:
+      - "<name>"
+      - "<health>/<max_health>"
+      - "<bar>"
+    Bar:
+      Prefix: "[ "
+      Suffix: " ]"
+      Filler: "#"
+      HealthFiller: "#"
+      SeparateFiller: ""
+      Width: 20
+      FillerColor: "&f"
+      HealthColor: "&a"
