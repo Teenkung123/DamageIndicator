@@ -55,6 +55,7 @@ public class HoloDisplays {
     private final String damageIndicatorMagicCriticalPrefix;
     private final String damageIndicatorMagicCriticalSuffix;
     private final String damageIndicatorMagicCriticalColor;
+    private final boolean damageIndicatorEnabled;
 
     private final Map<String, HealthBarSettings> customHealthBars;
     private final Map<String, String> textReplace;
@@ -88,6 +89,7 @@ public class HoloDisplays {
         this.damageIndicatorMagicCriticalPrefix = configLoader.getDamageIndicatorMagicCriticalPrefix();
         this.damageIndicatorMagicCriticalSuffix = configLoader.getDamageIndicatorMagicCriticalSuffix();
         this.damageIndicatorMagicCriticalColor = configLoader.getDamageIndicatorMagicCriticalColor();
+        this.damageIndicatorEnabled = configLoader.getDamageIndicatorEnabled();
 
         this.textReplace = configLoader.getTextReplace();
         this.customHealthBars = configLoader.getCustomHealthBars();
@@ -140,7 +142,7 @@ public class HoloDisplays {
         }
 
         // Handle health bar hologram
-        if (!(entity instanceof Player)) {
+        if (!(entity instanceof Player) && defaultSettings.enabled() && (customHealthBars.getOrDefault(mythicMobsType, defaultSettings).enabled())) {
             UUID entityId = entity.getUniqueId();
             String healthId = "DamageIndicator_Health_" + entityId;
             Hologram healthHolo = DHAPI.getHologram(healthId);
@@ -187,7 +189,7 @@ public class HoloDisplays {
             taskMap.put(entityId, removeHealthTask);
         }
 
-        if (amount == 0) {
+        if (amount == 0 || !damageIndicatorEnabled) {
             return;
         }
 
@@ -196,7 +198,7 @@ public class HoloDisplays {
         Hologram amountHolo = DHAPI.createHologram(hologramId, entity.getLocation().clone().add(0, entity.getHeight() + damageIndicatorHeightOffset, 0));
         if (type.equals(AttackType.DAMAGE)) {
             DHAPI.addHologramLine(amountHolo,
-                    ((!isCritical) ? damageIndicatorDamagePrefix : damageIndicatorDamageCriticalColor) +
+                    ((!isCritical) ? damageIndicatorDamagePrefix : damageIndicatorDamageCriticalPrefix) +
                             ((!isCritical) ? damageIndicatorDamageColor : damageIndicatorDamageCriticalColor) +
                             replace(String.format("%.2f", amount)) +
                             ((!isCritical) ? damageIndicatorDamageSuffix : damageIndicatorDamageCriticalSuffix)
@@ -205,7 +207,7 @@ public class HoloDisplays {
             DHAPI.addHologramLine(amountHolo, damageIndicatorHealPrefix + damageIndicatorHealColor + replace(String.format("%.2f", amount)) + damageIndicatorHealSuffix);
         } else {
             DHAPI.addHologramLine(amountHolo,
-                    ((!isCritical) ? damageIndicatorMagicPrefix : damageIndicatorMagicCriticalColor) +
+                    ((!isCritical) ? damageIndicatorMagicPrefix : damageIndicatorMagicCriticalPrefix) +
                             ((!isCritical) ? damageIndicatorMagicColor : damageIndicatorMagicCriticalColor) +
                             replace(String.format("%.2f", amount)) +
                             ((!isCritical) ? damageIndicatorMagicSuffix : damageIndicatorMagicCriticalSuffix)
@@ -281,6 +283,7 @@ public class HoloDisplays {
         for (int i = 0; i < customHealthBars.getOrDefault(mobType, defaultSettings).lines().length; i++) {
             String line = customHealthBars.getOrDefault(mobType, defaultSettings).lines()[i]
                     .replace("<name>", replace(entity.getName()))
+                    .replace("<name_uncolored>", replace(entity.getName().replaceAll("(?i)[§&][0-9A-FK-OR]", "")))
                     .replace("<health>", String.format("%.2f", currentHealth))
                     .replace("<max_health>", String.format("%.2f", maxHealth))
                     .replace("<bar>", createHealthBar(currentHealth, maxHealth, mobType));

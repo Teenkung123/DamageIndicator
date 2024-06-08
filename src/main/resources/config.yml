@@ -1,5 +1,6 @@
 Holograms:
   HealthBar:
+    Enabled: true
     # The offset based on the entity's height, the higher number the more distance between hologram and entity's head
     HeightOffset: 1.0
     # The duration of the hologram in ticks (20 ticks = 1 second)
@@ -7,6 +8,8 @@ Holograms:
     # Update rate of the hologram (location, health) in ticks
     UpdateRate: 2
     # Lines to display in the health bar hologram
+    # Available placeholders:
+    # <name>, <name_uncolored>, <health>, <max_health>, <bar>
     Lines:
       - "<name>"          # The entity's name
       - "<health>/<max_health>"  # Current health and maximum health
@@ -29,6 +32,7 @@ Holograms:
       # Color code for the health part of the health bar
       HealthColor: "&a"
   DamageIndicator:
+    Enabled: true
     # Update rate of the animation
     UpdateRate: 1
     # Height offset from the entity
@@ -93,10 +97,13 @@ Replacement:
 #Custom Health bar for each MythicMobs (default is used when not specified)
 MythicMobs:
   SkeletalKnight:
-    HeightOffset: 1.0
+    Enabled: true
+    HeightOffset: 2
     HologramDuration: 100
     Lines:
-      - "<name>"
+      - "#ENTITY: AXOLOTL"
+      - ""
+      - "&u<name_uncolored>"
       - "<health>/<max_health>"
       - "<bar>"
     Bar:

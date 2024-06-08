@@ -11,6 +11,7 @@ public record HealthBarSettings(
         String separator,
         int width,
         String fillerColor,
-        String healthColor
+        String healthColor,
+        boolean enabled
 ) {
 }

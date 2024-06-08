@@ -8,3 +8,11 @@ softdepend:
   - Citizens
 depend:
   - DecentHolograms
+commands:
+  DamageIndicator:
+    description: reload the DamageIndicator plugin
+    permissions: damageindicator.admin
+
+permissions:
+  damageindicator.admin:
+    default: op

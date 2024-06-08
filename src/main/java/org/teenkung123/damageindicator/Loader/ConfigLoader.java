@@ -28,7 +28,8 @@ public class ConfigLoader {
                 config.getString("Holograms.HealthBar.Bar.SeparateFiller"),
                 config.getInt("Holograms.HealthBar.Bar.Width"),
                 config.getString("Holograms.HealthBar.Bar.FillerColor"),
-                config.getString("Holograms.HealthBar.Bar.HealthColor")
+                config.getString("Holograms.HealthBar.Bar.HealthColor"),
+                config.getBoolean("Holograms.HealthBar.Enabled", true)
         );
         loadConfig();
     }
@@ -127,6 +128,10 @@ public class ConfigLoader {
         return config.getString("Holograms.DamageIndicator.Others.CriticalColor", "&c");
     }
 
+    public boolean getDamageIndicatorEnabled() {
+        return config.getBoolean("Holograms.DamageIndicator.Enabled", true);
+    }
+
     @SuppressWarnings("DataFlowIssue")
     public Map<String, String> getTextReplace() {
         Map<String, String> replacements = new HashMap<>();
@@ -151,7 +156,8 @@ public class ConfigLoader {
                     config.getString("MythicMobs." + key + ".Bar.SeparateFiller"),
                     config.getInt("MythicMobs." + key + ".Bar.Width"),
                     config.getString("MythicMobs." + key + ".Bar.FillerColor"),
-                    config.getString("MythicMobs." + key + ".Bar.HealthColor")
+                    config.getString("MythicMobs." + key + ".Bar.HealthColor"),
+                    config.getBoolean("MythicMobs." + key + ".Enabled", true)
             );
             bars.put(key, settings);
         }

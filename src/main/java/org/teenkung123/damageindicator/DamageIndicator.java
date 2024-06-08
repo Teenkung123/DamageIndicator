@@ -38,6 +38,8 @@ public final class DamageIndicator extends JavaPlugin {
 
         Bukkit.getPluginManager().registerEvents(new HealEvent(this), this);
         Bukkit.getPluginManager().registerEvents(new DeathEvent(this), this);
+        //noinspection DataFlowIssue
+        getCommand("DamageIndicator").setExecutor(new CommandHandler(this));
     }
 
     @Override
