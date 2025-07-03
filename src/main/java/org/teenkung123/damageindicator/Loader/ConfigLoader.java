@@ -5,6 +5,7 @@ import org.teenkung123.damageindicator.DamageIndicator;
 import org.teenkung123.damageindicator.Utils.HealthBarSettings;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class ConfigLoader {
@@ -29,7 +30,12 @@ public class ConfigLoader {
                 config.getInt("Holograms.HealthBar.Bar.Width"),
                 config.getString("Holograms.HealthBar.Bar.FillerColor"),
                 config.getString("Holograms.HealthBar.Bar.HealthColor"),
-                config.getBoolean("Holograms.HealthBar.Enabled", true)
+                config.getBoolean("Holograms.HealthBar.Enabled", true),
+                config.getBoolean("Holograms.HealthBar.AlwaysVisible.Enabled", false),
+                config.getInt("Holograms.HealthBar.AlwaysVisible.Distance", 10),
+                config.getStringList("Holograms.HealthBar.AlwaysVisible.DisabledWorlds"),
+                config.getString("Holograms.HealthBar.Bar.HealthBarPercentColor"),
+                config.getBoolean("Holograms.HealthBar.Bar.OverrideColor")
         );
         loadConfig();
     }
@@ -128,14 +134,46 @@ public class ConfigLoader {
         return config.getString("Holograms.DamageIndicator.Others.CriticalColor", "&c");
     }
 
+    public boolean getHealthBarAlwaysVisible() {
+        return config.getBoolean("Holograms.HealthBar.AlwaysVisible.Enabled", false);
+    }
+
+    public int getHealthBarAlwaysVisibleDistance() {
+        return config.getInt("Holograms.HealthBar.AlwaysVisible.Distance", 10);
+    }
+
+    public List<String> getHealthBarAlwaysVisibleDisabledWorlds() {
+        return config.getStringList("Holograms.HealthBar.AlwaysVisible.DisabledWorlds");
+    }
+
+    public Integer getSoftEntityThreshold() {
+        return config.getInt("Holograms.HealthBar.AlwaysVisible.SoftEntityThreshold", 40);
+    }
+
+    public Integer getHardEntityThreshold() {
+        return config.getInt("Holograms.HealthBar.AlwaysVisible.HardEntityThreshold", 100);
+    }
+
     public boolean getDamageIndicatorEnabled() {
         return config.getBoolean("Holograms.DamageIndicator.Enabled", true);
     }
+
+    public boolean getReplacementEnabled() {
+        return config.getBoolean("Replacement.Enabled", true);
+    }
+    public boolean getIsWhitelisted() {
+        return config.getString("Holograms.HealthBar.WorldMode", "Whitelist").equalsIgnoreCase("Whitelist");
+    }
+    public List<String> getWorlds() {
+        return config.getStringList("Holograms.HealthBar.Worlds");
+    }
+
 
     @SuppressWarnings("DataFlowIssue")
     public Map<String, String> getTextReplace() {
         Map<String, String> replacements = new HashMap<>();
         for (String key : config.getConfigurationSection("Replacement").getKeys(false)) {
+            if (key.equalsIgnoreCase("Enabled")) continue;
             replacements.put(key, config.getString("Replacement." + key));
         }
         return replacements;
@@ -157,7 +195,12 @@ public class ConfigLoader {
                     config.getInt("MythicMobs." + key + ".Bar.Width"),
                     config.getString("MythicMobs." + key + ".Bar.FillerColor"),
                     config.getString("MythicMobs." + key + ".Bar.HealthColor"),
-                    config.getBoolean("MythicMobs." + key + ".Enabled", true)
+                    config.getBoolean("MythicMobs." + key + ".Enabled", true),
+                    config.getBoolean("MythicMobs." + key + ".AlwaysVisible.Enabled", false),
+                    config.getInt("MythicMobs." + key + ".AlwaysVisible.Distance", 10),
+                    config.getStringList("MythicMobs." + key + ".AlwaysVisible.DisabledWorlds"),
+                    config.getString("MythicMobs." + key + ".Bar.HealthBarPercentColor"),
+                    config.getBoolean("MythicMobs." + key + ".Bar.OverrideColor")
             );
             bars.put(key, settings);
         }

@@ -1,7 +1,7 @@
 package org.teenkung123.damageindicator.Events;
 
-import eu.decentsoftware.holograms.api.DHAPI;
-import eu.decentsoftware.holograms.api.holograms.Hologram;
+import io.lumine.mythic.bukkit.events.MythicMobDeathEvent;
+import org.bukkit.Bukkit;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDeathEvent;
@@ -25,10 +25,26 @@ public class DeathEvent implements Listener {
     @EventHandler
     public void onDeath(EntityDeathEvent event) {
         UUID entityId = event.getEntity().getUniqueId();
-        String healthId = "DamageIndicator_Health_" + entityId;
-        Hologram healthHolo = DHAPI.getHologram(healthId);
-        if (healthHolo != null) {
-            healthHolo.delete();
+        String healthId = "damageindicator_health_" + entityId;
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            removeHolo(healthId, entityId);
+        }, 20);
+
+    }
+
+    @EventHandler
+    public void onDeath2(MythicMobDeathEvent event) {
+        UUID entityId = event.getEntity().getUniqueId();
+        String healthId = "damageindicator_health_" + entityId;
+
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            removeHolo(healthId, entityId);
+        }, 20);
+    }
+
+    private void removeHolo(String healthId, UUID entityId) {
+        if (plugin.getHologramManager().getHologram(healthId).isPresent()) {
+            plugin.getHologramManager().remove(healthId);
         }
         if (plugin.getHoloDisplays().getTaskMap().containsKey(entityId)) {
             plugin.getHoloDisplays().getTaskMap().get(entityId).cancel();

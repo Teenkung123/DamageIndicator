@@ -1,6 +1,7 @@
 package org.teenkung123.damageindicator;
 
-import eu.decentsoftware.holograms.api.holograms.Hologram;
+import com.maximde.hologramlib.HologramLib;
+import com.maximde.hologramlib.hologram.HologramManager;
 import io.lumine.mythic.bukkit.MythicBukkit;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -12,21 +13,34 @@ import org.teenkung123.damageindicator.Events.HealEvent;
 import org.teenkung123.damageindicator.Events.MythicMobsDamage;
 import org.teenkung123.damageindicator.Events.VanillaEvent;
 import org.teenkung123.damageindicator.Loader.ConfigLoader;
+import org.teenkung123.damageindicator.Utils.HealthBarBatchUpdater;
 import org.teenkung123.damageindicator.Utils.HoloDisplays;
 
 public final class DamageIndicator extends JavaPlugin {
 
     private ConfigLoader configLoader;
     private HoloDisplays holoDisplays;
+    private HealthBarBatchUpdater healthBarBatchUpdater;
     private boolean usePlaceholderAPI;
     private boolean useMythicMobs;
+    private boolean useMyPet;
     private MythicBukkit mythicBukkit;
+    private HologramManager hologramManager;
 
+    @Override
+    public void onLoad() {
+        HologramLib.onLoad(this); /*Only needed if you shade HologramLib*/
+    }
 
     @Override
     public void onEnable() {
         usePlaceholderAPI = Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI");
         useMythicMobs = Bukkit.getPluginManager().isPluginEnabled("MythicMobs");
+        useMyPet = Bukkit.getPluginManager().isPluginEnabled("MyPet");
+        HologramLib.getManager().ifPresentOrElse(
+                manager -> hologramManager = manager,
+                () -> getLogger().severe("Failed to initialize HologramLib manager.")
+        );
         removeHolograms();
         loadData();
 
@@ -40,6 +54,7 @@ public final class DamageIndicator extends JavaPlugin {
         Bukkit.getPluginManager().registerEvents(new DeathEvent(this), this);
         //noinspection DataFlowIssue
         getCommand("DamageIndicator").setExecutor(new CommandHandler(this));
+        scheduleAutoDelete();
     }
 
     @Override
@@ -52,21 +67,33 @@ public final class DamageIndicator extends JavaPlugin {
     public boolean getUsePlaceholderAPI() { return usePlaceholderAPI; }
     public boolean getUseMythicMobs() { return useMythicMobs; }
     public MythicBukkit getMythicBukkit() { return mythicBukkit; }
+    public HealthBarBatchUpdater getHealthBarBatchUpdater() { return healthBarBatchUpdater; }
+
+    public HologramManager getHologramManager() {
+        return hologramManager;
+    }
 
     public void loadData() {
+        if (healthBarBatchUpdater != null) healthBarBatchUpdater.stopBatchUpdating();
         this.reloadConfig();
         configLoader = new ConfigLoader(this);
         holoDisplays = new HoloDisplays(this);
+        healthBarBatchUpdater = new HealthBarBatchUpdater(this, configLoader, holoDisplays);
         if (useMythicMobs) {
             mythicBukkit = MythicBukkit.inst();
         }
+
+        if (configLoader.getHealthBarAlwaysVisible()) {
+            healthBarBatchUpdater.startBatchUpdating();
+        }
+
     }
 
     public void removeHolograms() {
         // Remove holograms
-        for (Hologram holo : Hologram.getCachedHolograms()) {
-            if (holo.getId().startsWith("DamageIndicator_")) {
-                holo.delete();
+        for (String holo : hologramManager.getHologramIds()) {
+            if (holo.startsWith("damageindicator_")) {
+                hologramManager.remove(holo);
             }
         }
 
@@ -81,4 +108,17 @@ public final class DamageIndicator extends JavaPlugin {
         }
     }
 
+    public void scheduleAutoDelete() {
+        getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
+            for (String holoId : hologramManager.getHologramIds()) {
+                if (holoId.startsWith("damageindicator_health_")) {
+                    hologramManager.remove(holoId);
+                }
+            }
+        }, 20*300L, 20*300L);
+    }
+
+    public boolean getUseMyPet() {
+        return useMyPet;
+    }
 }

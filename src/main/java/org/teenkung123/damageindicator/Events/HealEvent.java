@@ -24,6 +24,12 @@ public class HealEvent implements Listener {
     @SuppressWarnings("DataFlowIssue")
     @EventHandler
     public void onHeal(EntityRegainHealthEvent event) {
+        if (plugin.getConfigLoader().getIsWhitelisted() && !plugin.getConfigLoader().getWorlds().contains(event.getEntity().getWorld().getName())) {
+            return;
+        }
+        if (!plugin.getConfigLoader().getIsWhitelisted() && plugin.getConfigLoader().getWorlds().contains(event.getEntity().getWorld().getName())) {
+            return;
+        }
         if (plugin.getHoloDisplays().shouldHandleEvent(event.getEntity())) {
             if (((LivingEntity) event.getEntity()).getHealth() < ((LivingEntity) event.getEntity()).getAttribute(Attribute.GENERIC_MAX_HEALTH).getValue()) {
                 plugin.getHoloDisplays().handleDamageEvent(event.getEntity(), event.getAmount(), AttackType.HEALING, false); // Green for healing

@@ -7,9 +7,16 @@ Holograms:
     HologramDuration: 100
     # Update rate of the hologram (location, health) in ticks
     UpdateRate: 2
+    AlwaysVisible:
+      Enabled: false
+      # The distance to show the hologram when player is near
+      Distance: 32
+      SoftEntityThreshold: 80
+      HardEntityThreshold: 110
+      DisabledWorlds: []
     # Lines to display in the health bar hologram
     # Available placeholders:
-    # <name>, <name_uncolored>, <health>, <max_health>, <bar>
+    # <name>, <name_uncolored>, <health>, <max_health>, <bar>, <hp_percent>, <hp_percent_bar>
     Lines:
       - "<name>"          # The entity's name
       - "<health>/<max_health>"  # Current health and maximum health
@@ -31,8 +38,16 @@ Holograms:
       FillerColor: "&f"
       # Color code for the health part of the health bar
       HealthColor: "&a"
+      # Color code for the percent inside the health bar
+      HealthBarPercentColor: "&c"
+      # Should health bar change color based on health percent
+      OverrideColor: true
+    # Available: Blacklist, Whitelist
+    WorldMode: Blacklist
+    Worlds: []
+
   DamageIndicator:
-    Enabled: true
+    Enabled: false
     # Update rate of the animation
     UpdateRate: 1
     # Height offset from the entity
@@ -82,6 +97,7 @@ Holograms:
 # these settings does not apply to MythicMobs's entity name
 # if you wanted to change the health bar use config above
 Replacement:
+  Enabled: false
   1: '1'
   2: '2'
   3: '3'
@@ -101,8 +117,6 @@ MythicMobs:
     HeightOffset: 2
     HologramDuration: 100
     Lines:
-      - "#ENTITY: AXOLOTL"
-      - ""
       - "&u<name_uncolored>"
       - "<health>/<max_health>"
       - "<bar>"

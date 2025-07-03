@@ -22,6 +22,12 @@ public class VanillaEvent implements Listener {
      */
     @EventHandler
     public void onDamageByEntity(EntityDamageByEntityEvent event) {
+        if (plugin.getConfigLoader().getIsWhitelisted() && !plugin.getConfigLoader().getWorlds().contains(event.getEntity().getWorld().getName())) {
+            return;
+        }
+        if (!plugin.getConfigLoader().getIsWhitelisted() && plugin.getConfigLoader().getWorlds().contains(event.getEntity().getWorld().getName())) {
+            return;
+        }
         if (plugin.getHoloDisplays().shouldHandleEvent(event.getEntity()) && !event.isCancelled()) {
             plugin.getHoloDisplays().handleDamageEvent(event.getEntity(), event.getFinalDamage(), AttackType.DAMAGE, event.isCritical()); // Red for damage
         }
@@ -34,6 +40,12 @@ public class VanillaEvent implements Listener {
      */
     @EventHandler
     public void onDamage(EntityDamageEvent event) {
+        if (plugin.getConfigLoader().getIsWhitelisted() && !plugin.getConfigLoader().getWorlds().contains(event.getEntity().getWorld().getName())) {
+            return;
+        }
+        if (!plugin.getConfigLoader().getIsWhitelisted() && plugin.getConfigLoader().getWorlds().contains(event.getEntity().getWorld().getName())) {
+            return;
+        }
         if (plugin.getHoloDisplays().shouldHandleEvent(event.getEntity()) && !(event instanceof EntityDamageByEntityEvent) && event.isCancelled()) {
             plugin.getHoloDisplays().handleDamageEvent(event.getEntity(), event.getFinalDamage(), AttackType.DAMAGE, false); // Red for damage
         }

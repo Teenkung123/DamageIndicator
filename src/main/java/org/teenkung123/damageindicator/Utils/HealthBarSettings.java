@@ -1,5 +1,7 @@
 package org.teenkung123.damageindicator.Utils;
 
+import java.util.List;
+
 public record HealthBarSettings(
         double heightOffset,
         int hologramDuration,
@@ -12,6 +14,11 @@ public record HealthBarSettings(
         int width,
         String fillerColor,
         String healthColor,
-        boolean enabled
+        boolean enabled,
+        boolean alwaysShow,
+        int alwaysShowDistance,
+        List<String> alwaysShowDisabledWorlds,
+        String percentColor,
+        boolean overrideColor
 ) {
 }

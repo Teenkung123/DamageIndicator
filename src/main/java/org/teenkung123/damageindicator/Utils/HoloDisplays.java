@@ -1,40 +1,44 @@
 package org.teenkung123.damageindicator.Utils;
 
-import eu.decentsoftware.holograms.api.DHAPI;
-import eu.decentsoftware.holograms.api.holograms.Hologram;
-import eu.decentsoftware.holograms.api.utils.PAPI;
-import io.lumine.mythic.bukkit.MythicBukkit;
+import com.maximde.hologramlib.hologram.TextHologram;
+import de.Keyle.MyPet.api.entity.MyPetBukkitEntity;
+import me.clip.placeholderapi.PlaceholderAPI;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.attribute.Attribute;
-import org.bukkit.entity.Entity;
-import org.bukkit.entity.LivingEntity;
-import org.bukkit.entity.Player;
+import org.bukkit.entity.*;
 import org.bukkit.scheduler.BukkitRunnable;
-import org.bukkit.scoreboard.Scoreboard;
-import org.bukkit.scoreboard.ScoreboardManager;
-import org.bukkit.scoreboard.Team;
-import org.teenkung123.damageindicator.Loader.ConfigLoader;
+import org.bukkit.scoreboard.*;
 import org.teenkung123.damageindicator.DamageIndicator;
+import org.teenkung123.damageindicator.Loader.ConfigLoader;
 
 import javax.annotation.Nullable;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
+import java.text.DecimalFormat;
+import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.regex.Pattern;
 
 public class HoloDisplays {
 
     private final DamageIndicator plugin;
-    private final ConfigLoader configLoader;
-    private final Map<UUID, BukkitRunnable> taskMap = new HashMap<>();
-    private final HealthBarSettings defaultSettings;
-    private Team damageIndicatorTeam;
+    private final boolean useMythicMobs;
+    private final boolean usePlaceholderAPI;
+    private final Object mythicBukkit;
 
-    // Configuration for health bar properties
+    // We store the last health-bar text for each entity to avoid unnecessary .update() calls:
+    private final Map<UUID, String> lastHealthTextMap = new HashMap<>();
+
+    private final Team damageIndicatorTeam;
+    private final HealthBarSettings defaultSettings;
+    private final Map<String, HealthBarSettings> customHealthBars;
+    private final boolean replacementEnabled;
+    private final Map<Pattern, String> patternReplaceMap = new HashMap<>();
+    private static final DecimalFormat TWO_DECIMAL_FORMAT = new DecimalFormat("0.00");
+
+    // Health bar config
     private final int healthBarUpdateRate;
 
-    // Configuration for damage indicator properties
+    // Damage indicator config
     private final int damageIndicatorUpdateRate;
     private final double damageIndicatorHeightOffset;
     private final double damageIndicatorInitialYSpeed;
@@ -57,18 +61,25 @@ public class HoloDisplays {
     private final String damageIndicatorMagicCriticalColor;
     private final boolean damageIndicatorEnabled;
 
-    private final Map<String, HealthBarSettings> customHealthBars;
-    private final Map<String, String> textReplace;
+    private final Map<UUID, BukkitRunnable> taskMap = new HashMap<>();
+    private final Map<UUID, Location> lastTeleportLoc = new HashMap<>();
+
+
+    // For piecewise gradient color
+    private static final int GREEN  = 0x00FF00;
+    private static final int YELLOW = 0xFFFF00;
+    private static final int ORANGE = 0xFFA500;
+    private static final int RED    = 0xFF0000;
 
     public HoloDisplays(DamageIndicator plugin) {
         this.plugin = plugin;
-        this.configLoader = plugin.getConfigLoader();
+        this.useMythicMobs = plugin.getUseMythicMobs();
+        this.usePlaceholderAPI = plugin.getUsePlaceholderAPI();
+        this.mythicBukkit = plugin.getMythicBukkit();
+
+        ConfigLoader configLoader = plugin.getConfigLoader();
         this.defaultSettings = configLoader.getDefaultSettings();
-
-        // Load health bar configurations
         this.healthBarUpdateRate = configLoader.getHealthBarUpdateRate();
-
-        // Load damage indicator configurations
         this.damageIndicatorUpdateRate = configLoader.getDamageIndicatorUpdateRate();
         this.damageIndicatorHeightOffset = configLoader.getDamageIndicatorHeightOffset();
         this.damageIndicatorInitialYSpeed = configLoader.getDamageIndicatorInitialYSpeed();
@@ -90,245 +101,371 @@ public class HoloDisplays {
         this.damageIndicatorMagicCriticalSuffix = configLoader.getDamageIndicatorMagicCriticalSuffix();
         this.damageIndicatorMagicCriticalColor = configLoader.getDamageIndicatorMagicCriticalColor();
         this.damageIndicatorEnabled = configLoader.getDamageIndicatorEnabled();
-
-        this.textReplace = configLoader.getTextReplace();
         this.customHealthBars = configLoader.getCustomHealthBars();
+        this.replacementEnabled = configLoader.getReplacementEnabled();
+        Map<String, String> textReplace = configLoader.getTextReplace();
 
-        // Initialize scoreboard team
-        ScoreboardManager manager = Bukkit.getScoreboardManager();
-        Scoreboard board = manager.getMainScoreboard();
-        damageIndicatorTeam = board.getTeam("DamageIndicatorBars");
-        if (damageIndicatorTeam == null) {
-            damageIndicatorTeam = board.registerNewTeam("DamageIndicatorBars");
-            damageIndicatorTeam.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.NEVER);
+        ScoreboardManager scoreboardManager = Bukkit.getScoreboardManager();
+        Scoreboard mainScoreboard = scoreboardManager.getMainScoreboard();
+        Team team = mainScoreboard.getTeam("DamageIndicatorBars");
+        if (team == null) {
+            team = mainScoreboard.registerNewTeam("DamageIndicatorBars");
+            team.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.NEVER);
+        }
+        this.damageIndicatorTeam = team;
+
+        for (Map.Entry<String, String> entry : textReplace.entrySet()) {
+            patternReplaceMap.put(Pattern.compile(entry.getKey()), entry.getValue());
         }
     }
 
-    /**
-     * Determines whether the event should be handled for the given entity.
-     *
-     * @param entity The entity to check.
-     * @return True if the event should be handled, false otherwise.
-     */
+    public Map<UUID, BukkitRunnable> getTaskMap() { return taskMap; }
+
+    // Decide if we should handle this entity at all.
     public boolean shouldHandleEvent(Entity entity) {
-        if (entity instanceof Player) {
-            return false;
+        return !entity.isInvulnerable() && !entity.hasMetadata("NPC");
+    }
+
+    public void handleDamageEvent(Entity entity, double amount, AttackType type, boolean isCritical) {
+        if (!(entity instanceof LivingEntity living)
+                || living.getAttribute(Attribute.GENERIC_MAX_HEALTH) == null) {
+            return;
         }
-        if (entity.isInvulnerable()) {
-            return false;
+        // Refresh the health bar when damage is taken
+        displayHealthBar(living, false);
+
+        // Show damage indicator if enabled
+        if (damageIndicatorEnabled && amount != 0.0) {
+            displayDamageIndicator(living, amount, type, isCritical);
         }
-        return !entity.hasMetadata("NPC");
     }
 
     /**
-     * Handles the logic for creating and updating holograms when an entity is damaged or healed.
-     *
-     * @param entity    The entity that was damaged or healed.
-     * @param amount    The amount of damage or healing.
-     * @param type      The type of damage display.
+     * Displays or refreshes the health bar hologram for an entity.
+     * If the hologram doesn't exist, we create a new one with setUpdateTaskPeriod
+     * so HologramLib can handle movement updates automatically.
      */
-    @SuppressWarnings("ExtractMethodRecommender")
-    public void handleDamageEvent(Entity entity, double amount, AttackType type, boolean isCritical) {
-        if (((LivingEntity) entity).getAttribute(Attribute.GENERIC_MAX_HEALTH) == null) {
+    public void displayHealthBar(LivingEntity entity, boolean noUpdate) {
+        String mythicMobsType = getMythicMobType(entity);
+        HealthBarSettings currentSettings = customHealthBars.getOrDefault(mythicMobsType, defaultSettings);
+        if (!currentSettings.enabled()) return;
+
+        // Skip certain entities
+        if (plugin.getUseMyPet() && (entity instanceof MyPetBukkitEntity)) return;
+        if (entity.getType() == EntityType.ARMOR_STAND || entity instanceof Player
+                || !entity.getPassengers().isEmpty() || entity.hasMetadata("NPC")) {
             return;
         }
 
-        String mythicMobsType = null;
-        if (plugin.getUseMythicMobs()) {
-            boolean isMythicMob = plugin.getMythicBukkit().getMobManager().isMythicMob(entity);
-            if (isMythicMob) {
-                mythicMobsType = plugin.getMythicBukkit().getMobManager().getMythicMobInstance(entity).getMobType();
-            }
-        }
+        UUID entityId = entity.getUniqueId();
+        final String healthId = "damageindicator_health_" + entityId;
 
-        // Handle health bar hologram
-        if (!(entity instanceof Player) && defaultSettings.enabled() && (customHealthBars.getOrDefault(mythicMobsType, defaultSettings).enabled())) {
-            UUID entityId = entity.getUniqueId();
-            String healthId = "DamageIndicator_Health_" + entityId;
-            Hologram healthHolo = DHAPI.getHologram(healthId);
-            if (healthHolo == null) {
-                healthHolo = DHAPI.createHologram(healthId, entity.getLocation().clone().add(0, entity.getHeight() + customHealthBars.getOrDefault(mythicMobsType, defaultSettings).heightOffset(), 0));
-                healthHolo.showAll();
-                initializeHealthHologram(healthHolo, mythicMobsType);
-            }
-            updateHealthHologram(healthHolo, (LivingEntity) entity, mythicMobsType);
+        // Create location above the entity
+        Location baseLoc = entity.getLocation().clone()
+                .add(0, entity.getHeight() + currentSettings.heightOffset(), 0);
 
-            // Assign entity to the DamageIndicatorBars team to hide name tag
-            damageIndicatorTeam.addEntry(entity.getUniqueId().toString());
+        TextHologram healthHolo;
 
-            Hologram finalHealthHolo = healthHolo;
-            String finalMythicMobsType = mythicMobsType;
-            BukkitRunnable updateHealthTask = new BukkitRunnable() {
-                @Override
-                public void run() {
-                    if (entity.isValid()) {
-                        finalHealthHolo.setLocation(entity.getLocation().clone().add(0, entity.getHeight() + customHealthBars.getOrDefault(finalMythicMobsType, defaultSettings).heightOffset(), 0));
-                        updateHealthHologram(finalHealthHolo, (LivingEntity) entity, finalMythicMobsType);
-                        finalHealthHolo.realignLines();
-                    } else {
-                        finalHealthHolo.delete();
-                        this.cancel();
-                    }
-                }
-            };
-            updateHealthTask.runTaskTimer(plugin, healthBarUpdateRate, healthBarUpdateRate);
-
-            // Schedule removal of health hologram if no new damage or heal occurs
-            if (taskMap.containsKey(entityId)) {
-                taskMap.get(entityId).cancel();
-            }
-            BukkitRunnable removeHealthTask = new BukkitRunnable() {
-                @Override
-                public void run() {
-                    damageIndicatorTeam.removeEntry(entity.getUniqueId().toString());
-                    finalHealthHolo.delete();
-                    updateHealthTask.cancel();
-                }
-            };
-            removeHealthTask.runTaskLater(plugin, customHealthBars.getOrDefault(mythicMobsType, defaultSettings).hologramDuration()); // healthBarHologramDuration ticks
-            taskMap.put(entityId, removeHealthTask);
-        }
-
-        if (amount == 0 || !damageIndicatorEnabled) {
-            return;
-        }
-
-        // Handle damage or heal hologram
-        String hologramId = "DamageIndicator_" + (type.equals(AttackType.HEALING) ? "Heal_" : "Damage_") + UUID.randomUUID();
-        Hologram amountHolo = DHAPI.createHologram(hologramId, entity.getLocation().clone().add(0, entity.getHeight() + damageIndicatorHeightOffset, 0));
-        if (type.equals(AttackType.DAMAGE)) {
-            DHAPI.addHologramLine(amountHolo,
-                    ((!isCritical) ? damageIndicatorDamagePrefix : damageIndicatorDamageCriticalPrefix) +
-                            ((!isCritical) ? damageIndicatorDamageColor : damageIndicatorDamageCriticalColor) +
-                            replace(String.format("%.2f", amount)) +
-                            ((!isCritical) ? damageIndicatorDamageSuffix : damageIndicatorDamageCriticalSuffix)
-            );
-        } else if (type.equals(AttackType.HEALING)) {
-            DHAPI.addHologramLine(amountHolo, damageIndicatorHealPrefix + damageIndicatorHealColor + replace(String.format("%.2f", amount)) + damageIndicatorHealSuffix);
+        if (!plugin.getHologramManager().hologramExists(healthId)) {
+            // Create new hologram only once
+            healthHolo = new TextHologram(healthId)
+                    .setUpdateTaskPeriod(5L);
+            plugin.getHologramManager().spawn(healthHolo, baseLoc);
         } else {
-            DHAPI.addHologramLine(amountHolo,
-                    ((!isCritical) ? damageIndicatorMagicPrefix : damageIndicatorMagicCriticalPrefix) +
-                            ((!isCritical) ? damageIndicatorMagicColor : damageIndicatorMagicCriticalColor) +
-                            replace(String.format("%.2f", amount)) +
-                            ((!isCritical) ? damageIndicatorMagicSuffix : damageIndicatorMagicCriticalSuffix)
-            );
+            healthHolo = (TextHologram) plugin.getHologramManager().getHologram(healthId).get();
+            healthHolo.teleport(baseLoc);
         }
-        amountHolo.showAll();
 
-        animateHologram(amountHolo, entity, mythicMobsType);
+        // Update text right away
+        updateHealthHologram(healthHolo, entity, mythicMobsType);
+
+        // Cancel any old scheduled removal or movement task
+        if (taskMap.containsKey(entityId)) {
+            taskMap.get(entityId).cancel();
+        }
+
+        // Create a repeating task to track movement
+        BukkitRunnable updateHealthTask = new BukkitRunnable() {
+            @Override
+            public void run() {
+                if (!entity.isValid()) {
+                    // If entity is dead or invalid, remove the hologram
+                    plugin.getHologramManager().remove(healthId);
+                    cancel();
+                    return;
+                }
+
+                // Calculate desired location
+                Location newLoc = entity.getLocation().clone()
+                        .add(0, entity.getHeight() + currentSettings.heightOffset(), 0);
+
+                // Compare with last known location
+                Location oldLoc = lastTeleportLoc.get(entity.getUniqueId());
+                if (oldLoc == null || oldLoc.distanceSquared(newLoc) > 0.01) {
+                    // Only teleport if distance >= 0.1 blocks
+                    healthHolo.teleport(newLoc);
+                    lastTeleportLoc.put(entity.getUniqueId(), newLoc);
+                }
+
+                // Optionally re-check text (if we want “live” health changes, e.g. regen):
+                if (!noUpdate) {
+                    updateHealthHologram(healthHolo, entity, mythicMobsType);
+                }
+            }
+        };
+        updateHealthTask.runTaskTimer(plugin, healthBarUpdateRate, healthBarUpdateRate);
+
+        // Store the task so it can be canceled if needed
+        taskMap.put(entityId, updateHealthTask);
+    }
+
+    /**
+     * Creates a floating damage/healing indicator.
+     */
+    public void displayDamageIndicator(LivingEntity entity, double amount, AttackType type, boolean isCritical) {
+        String mythicMobsType = getMythicMobType(entity);
+        HealthBarSettings currentSettings = customHealthBars.getOrDefault(mythicMobsType, defaultSettings);
+
+        String hologramId = "damageindicator_" + (type == AttackType.HEALING ? "heal_" : "damage_")
+                + ThreadLocalRandom.current().nextLong();
+
+        Location baseLoc = entity.getLocation().clone()
+                .add(0, entity.getHeight() + damageIndicatorHeightOffset, 0);
+
+        TextHologram amountHolo = new TextHologram(hologramId)
+                // Quick updates for the short-lived indicator
+                .setUpdateTaskPeriod(1L)
+                .setViewRange(plugin.getConfigLoader().getHealthBarAlwaysVisibleDistance());
+        plugin.getHologramManager().spawn(amountHolo, baseLoc);
+
+        // Format text
+        String formattedAmount = TWO_DECIMAL_FORMAT.format(amount);
+        String line;
+        switch (type) {
+            case DAMAGE -> {
+                if (!isCritical) {
+                    line = damageIndicatorDamagePrefix + damageIndicatorDamageColor
+                            + replace(formattedAmount) + damageIndicatorDamageSuffix;
+                } else {
+                    line = damageIndicatorDamageCriticalPrefix + damageIndicatorDamageCriticalColor
+                            + replace(formattedAmount) + damageIndicatorDamageCriticalSuffix;
+                }
+            }
+            case HEALING -> {
+                line = damageIndicatorHealPrefix + damageIndicatorHealColor
+                        + replace(formattedAmount) + damageIndicatorHealSuffix;
+            }
+            case MAGIC -> {
+                if (!isCritical) {
+                    line = damageIndicatorMagicPrefix + damageIndicatorMagicColor
+                            + replace(formattedAmount) + damageIndicatorMagicSuffix;
+                } else {
+                    line = damageIndicatorMagicCriticalPrefix + damageIndicatorMagicCriticalColor
+                            + replace(formattedAmount) + damageIndicatorMagicCriticalSuffix;
+                }
+            }
+            default -> {
+                line = damageIndicatorDamagePrefix + damageIndicatorDamageColor
+                        + replace(formattedAmount) + damageIndicatorDamageSuffix;
+            }
+        }
+        amountHolo.setMiniMessageText(ColorTranslator.toMiniMessageFormat(line));
+
+        animateHologram(amountHolo, entity, currentSettings);
 
         BukkitRunnable removeAmountHoloTask = new BukkitRunnable() {
             @Override
             public void run() {
-                amountHolo.delete();
+                plugin.getHologramManager().remove(hologramId);
             }
         };
-        removeAmountHoloTask.runTaskLater(plugin, customHealthBars.getOrDefault(mythicMobsType, defaultSettings).hologramDuration());
-
+        removeAmountHoloTask.runTaskLater(plugin, currentSettings.hologramDuration());
     }
 
     /**
-     * Initializes the health hologram with empty lines.
-     *
-     * @param holo The hologram to initialize.
+     * Animate the indicator drifting up; no .update() calls needed
+     * since setUpdateTaskPeriod(1L) handles it in the background.
      */
-    private void initializeHealthHologram(Hologram holo, @Nullable String mobType) {
-        for (String ignored : customHealthBars.getOrDefault(mobType, defaultSettings).lines()) {
-            DHAPI.addHologramLine(holo, "");
-        }
-    }
+    private void animateHologram(TextHologram holo, Entity entity, HealthBarSettings currentSettings) {
+        double angle = ThreadLocalRandom.current().nextDouble(0, 2*Math.PI);
+        final double xSpeed = damageIndicatorAnimationSpeed * Math.cos(angle);
+        final double zSpeed = damageIndicatorAnimationSpeed * Math.sin(angle);
+        final double[] ySpeed = { damageIndicatorInitialYSpeed };
 
-    /**
-     * Animates the damage or heal hologram to simulate a floating and falling effect.
-     *
-     * @param holo   The hologram to animate.
-     * @param entity The entity that the hologram is related to.
-     */
-    private void animateHologram(Hologram holo, Entity entity, @Nullable String mobType) {
-        double angle = ThreadLocalRandom.current().nextDouble(0, 2 * Math.PI);
-        double xSpeed = damageIndicatorAnimationSpeed * Math.cos(angle);
-        double zSpeed = damageIndicatorAnimationSpeed * Math.sin(angle);
-        final double[] ySpeed = {damageIndicatorInitialYSpeed};
-
+        final Location loc = holo.getLocation().clone();
         new BukkitRunnable() {
             int ticks = 0;
-            final Location loc = holo.getLocation().clone();
-
             @Override
             public void run() {
-                if (ticks >= 40 || loc.getY() <= entity.getLocation().getY()) { // Stop after 2 seconds (40 ticks)
-                    holo.delete();
-                    this.cancel();
+                if (ticks >= 40 || loc.getY() <= entity.getLocation().getY()) {
+                    plugin.getHologramManager().remove(holo);
+                    cancel();
                     return;
                 }
                 loc.add(xSpeed, ySpeed[0], zSpeed);
-                ySpeed[0] -= damageIndicatorGravity; // Simulate gravity
-                holo.setLocation(loc);
-                holo.realignLines();
+                ySpeed[0] -= damageIndicatorGravity;
+                holo.teleport(loc);
                 ticks++;
             }
         }.runTaskTimer(plugin, damageIndicatorUpdateRate, damageIndicatorUpdateRate);
     }
 
     /**
-     * Updates the health hologram to display the current health status of the entity.
-     *
-     * @param holo   The health hologram to update.
-     * @param entity The living entity whose health status is displayed.
+     * Core method to update the entity's health bar text.
+     * We call compareAndSetText(...) to avoid spamming .update().
      */
-    @SuppressWarnings("DataFlowIssue")
-    private void updateHealthHologram(Hologram holo, LivingEntity entity, @Nullable String mobType) {
+    private void updateHealthHologram(TextHologram holo, LivingEntity entity, @Nullable String mobType) {
         double currentHealth = entity.getHealth();
-        double maxHealth = entity.getAttribute(Attribute.GENERIC_MAX_HEALTH).getValue();
-        for (int i = 0; i < customHealthBars.getOrDefault(mobType, defaultSettings).lines().length; i++) {
-            String line = customHealthBars.getOrDefault(mobType, defaultSettings).lines()[i]
-                    .replace("<name>", replace(entity.getName()))
-                    .replace("<name_uncolored>", replace(entity.getName().replaceAll("(?i)[§&][0-9A-FK-OR]", "")))
-                    .replace("<health>", String.format("%.2f", currentHealth))
-                    .replace("<max_health>", String.format("%.2f", maxHealth))
-                    .replace("<bar>", createHealthBar(currentHealth, maxHealth, mobType));
-            if (plugin.getUsePlaceholderAPI()) {
-                DHAPI.setHologramLine(holo, i, PAPI.setPlaceholders(null, line));
-            } else {
-                DHAPI.setHologramLine(holo, i, line);
+        double maxHealth = Objects.requireNonNull(entity.getAttribute(Attribute.GENERIC_MAX_HEALTH)).getValue();
+
+        HealthBarSettings settings = customHealthBars.getOrDefault(mobType, defaultSettings);
+        String entityName = entity.getName();
+        String entityNameUncolored = entityName.replaceAll("(?i)[§&][0-9A-FK-OR]", "");
+
+        // Build all lines
+        StringBuilder sb = new StringBuilder();
+        for (String s : settings.lines()) {
+            String line = s
+                    .replace("<name>", replace(entityName))
+                    .replace("<name_uncolored>", replace(entityNameUncolored))
+                    .replace("<health>", TWO_DECIMAL_FORMAT.format(currentHealth))
+                    .replace("<max_health>", TWO_DECIMAL_FORMAT.format(maxHealth))
+                    .replace("<bar>", createHealthBar(currentHealth, maxHealth, mobType, false))
+                    .replace("<hp_percent>", TWO_DECIMAL_FORMAT.format((currentHealth / maxHealth) * 100))
+                    .replace("<hp_percent_bar>", createHealthBar(currentHealth, maxHealth, mobType, true));
+
+            if (usePlaceholderAPI) {
+                line = PlaceholderAPI.setPlaceholders(null, line);
             }
+            sb.append(line).append("\n");
         }
+        // Trim trailing newline
+        String finalText = sb.substring(0, sb.length() - 1);
+
+        // Apply text only if changed, to avoid spamming .update()
+        compareAndSetText(holo, entity.getUniqueId(), finalText);
     }
 
     /**
-     * Creates a visual representation of the health bar.
-     *
-     * @param currentHealth The current health of the entity.
-     * @param maxHealth     The maximum health of the entity.
-     * @return A string representing the health bar.
+     * Compares newText to last known text for this entity.
+     * If different, sets text and calls .update() once.
      */
-    private String createHealthBar(double currentHealth, double maxHealth, @Nullable String mobType) {
-        if (customHealthBars.getOrDefault(mobType, defaultSettings).width() > 0) {
-
-            int filledBars = (int) (currentHealth / maxHealth * customHealthBars.getOrDefault(mobType, defaultSettings).width());
-            int emptyBars = customHealthBars.getOrDefault(mobType, defaultSettings).width() - filledBars;
-
-            HealthBarSettings settings = customHealthBars.getOrDefault(mobType, defaultSettings);
-
-            return settings.prefix() +
-                    settings.healthColor() + settings.healthFiller().repeat(Math.max(0, filledBars)) +
-                    settings.separator() +
-                    settings.fillerColor() + settings.filler().repeat(Math.max(0, emptyBars)) +
-                    settings.suffix();
-        } else {
-            return "";
+    private void compareAndSetText(TextHologram holo, UUID entityId, String newText) {
+        String oldText = lastHealthTextMap.getOrDefault(entityId, "");
+        if (!oldText.equals(newText)) {
+            holo.setMiniMessageText(ColorTranslator.toMiniMessageFormat(newText));
+            holo.update();  // Force immediate text refresh
+            lastHealthTextMap.put(entityId, newText);
         }
     }
 
+    private String createHealthBar(double currentHealth, double maxHealth, @Nullable String mobType, boolean withPercent) {
+        HealthBarSettings settings = customHealthBars.getOrDefault(mobType, defaultSettings);
+        final int width = settings.width();
+        if (width <= 0) return "";
+
+        double ratio = Math.max(0, Math.min(1, currentHealth / maxHealth));
+        int filledBars = (int) Math.round(ratio * width);
+        int emptyBars = width - filledBars;
+
+        boolean doOverride = settings.overrideColor();
+        final String barColor = doOverride ? getPiecewiseGradientColor(ratio) : settings.fillerColor();
+
+        String prefix = settings.prefix();
+        String suffix = settings.suffix();
+        String fillerColor = settings.fillerColor();
+        String healthFiller = settings.healthFiller();
+        String filler = settings.filler();
+
+        StringBuilder builder = new StringBuilder(prefix.length() + suffix.length() + (width * 2) + 30);
+        builder.append(prefix);
+
+        if (withPercent) {
+            double pct = ratio * 100.0;
+            final String percentColor = doOverride ? barColor : settings.percentColor();
+            String percentText = percentColor + " " + TWO_DECIMAL_FORMAT.format(pct) + "% ";
+            int insertIndex = (filledBars + emptyBars) / 2;
+            for (int i = 0; i < (filledBars + emptyBars); i++) {
+                if (i == insertIndex) {
+                    builder.append(percentText);
+                }
+                if (i < filledBars) {
+                    builder.append(barColor).append(healthFiller);
+                } else {
+                    builder.append(fillerColor).append(filler);
+                }
+            }
+        } else {
+            for (int i = 0; i < filledBars; i++) {
+                builder.append(barColor).append(healthFiller);
+            }
+            for (int i = 0; i < emptyBars; i++) {
+                builder.append(fillerColor).append(filler);
+            }
+        }
+        builder.append(suffix);
+        return builder.toString();
+    }
+
+    /**
+     * Returns the MythicMobs type for the entity if relevant.
+     */
+    private String getMythicMobType(Entity entity) {
+        if (useMythicMobs && mythicBukkit != null) {
+            try {
+                if (plugin.getMythicBukkit().getMobManager().isMythicMob(entity)) {
+                    return plugin.getMythicBukkit().getMobManager()
+                            .getMythicMobInstance(entity)
+                            .getMobType();
+                }
+            } catch (NullPointerException ignored) {
+            }
+        }
+        return null;
+    }
+
     private String replace(String string) {
-        for (String key :textReplace.keySet()) {
-            string = string.replaceAll(key, textReplace.getOrDefault(key, key));
+        if (!replacementEnabled) {
+            return string;
+        }
+        for (Map.Entry<Pattern, String> entry : patternReplaceMap.entrySet()) {
+            string = entry.getKey().matcher(string).replaceAll(entry.getValue());
         }
         return string;
     }
 
-    public Map<UUID, BukkitRunnable> getTaskMap() {
-        return taskMap;
+    // Gradient color logic
+    private String getPiecewiseGradientColor(double ratio) {
+        ratio = Math.max(0, Math.min(1, ratio));
+        if (ratio >= 0.75) {
+            double sub = (ratio - 0.75) / 0.25;
+            int color = interpolateColor(YELLOW, GREEN, sub);
+            return toColorCode(color);
+        } else if (ratio >= 0.50) {
+            double sub = (ratio - 0.50) / 0.25;
+            int color = interpolateColor(ORANGE, YELLOW, sub);
+            return toColorCode(color);
+        } else if (ratio >= 0.25) {
+            double sub = (ratio - 0.25) / 0.25;
+            int color = interpolateColor(RED, ORANGE, sub);
+            return toColorCode(color);
+        } else {
+            return toColorCode(RED);
+        }
     }
 
+    private int interpolateColor(int startColor, int endColor, double ratio) {
+        ratio = Math.max(0, Math.min(1, ratio));
+        int r1 = (startColor >> 16) & 0xFF, g1 = (startColor >> 8) & 0xFF, b1 = startColor & 0xFF;
+        int r2 = (endColor >> 16) & 0xFF, g2 = (endColor >> 8) & 0xFF, b2 = endColor & 0xFF;
+        int r = (int) (r1 + (r2 - r1) * ratio);
+        int g = (int) (g1 + (g2 - g1) * ratio);
+        int b = (int) (b1 + (b2 - b1) * ratio);
+        return (r << 16) | (g << 8) | b;
+    }
+
+    private String toColorCode(int color) {
+        int r = (color >> 16) & 0xFF, g = (color >> 8) & 0xFF, b = color & 0xFF;
+        return String.format("&#%02X%02X%02X", r, g, b);
+    }
 }
