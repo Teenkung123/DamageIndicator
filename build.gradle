@@ -1,31 +1,25 @@
-// build.gradle (root of your DamageIndicator project)
-
 import org.gradle.api.tasks.compile.JavaCompile
 
 plugins {
-    id 'java-library'                                  // expose your classes as an API
+    id 'java-library'                                  // exposes API
     id 'com.github.johnrengelman.shadow' version '7.1.2'
-    id 'maven-publish'                                 // adds publishToMavenLocal
+    id 'maven-publish'
 }
 
-group = 'com.github.Teenkung123'
-version = '1.0.0'
+group = findProperty('group') ?: 'com.github.Teenkung123'
+version = findProperty('version') ?: '1.0.0'           // JitPack can override with -Pversion
 
 java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(17)
-    }
-    sourceCompatibility = JavaLanguageVersion.of(17)
-    targetCompatibility = JavaLanguageVersion.of(17)
+    toolchain.languageVersion = JavaLanguageVersion.of(17)
 }
 
 repositories {
     mavenCentral()
-    maven { name = 'papermc-repo'; url = 'https://repo.papermc.io/repository/maven-public/' }
-    maven { name = 'sonatype';    url = 'https://oss.sonatype.org/content/groups/public/' }
+    maven { name = 'papermc'; url = 'https://repo.papermc.io/repository/maven-public/' }
+    maven { name = 'sonatype'; url = 'https://oss.sonatype.org/content/groups/public/' }
     maven { url  = 'https://jitpack.io' }
     maven { url  = 'https://repo.extendedclip.com/content/repositories/placeholderapi/' }
-    maven { name = 'phoenix';     url = 'https://nexus.phoenixdevt.fr/repository/maven-public/' }
+    maven { name = 'phoenix'; url = 'https://nexus.phoenixdevt.fr/repository/maven-public/' }
     maven { url  = 'https://mvn.lumine.io/repository/maven-public/' }
 }
 
@@ -40,8 +34,7 @@ dependencies {
 }
 
 shadowJar {
-    // Drop the "-all" classifier so JitPack publishes the same jar you deploy
-    archiveClassifier.set('')
+    archiveClassifier.set('')                           // make this the main jar
     dependencies {
         include(dependency('com.github.HologramLib:HologramLib:1.7.0'))
     }
@@ -55,12 +48,8 @@ tasks.register('sourcesJar', Jar) {
 publishing {
     publications {
         mavenJava(MavenPublication) {
-            // publish your shaded plugin jar
-            artifact(tasks.shadowJar) {
-                classifier = null
-            }
-            // optional: publish sources too
-            artifact(tasks.sourcesJar)
+            from components.shadow                     // publish the shaded jar
+            artifact(tasks.sourcesJar)                 // …plus sources
         }
     }
 }
