@@ -1,17 +1,15 @@
 import org.gradle.api.tasks.compile.JavaCompile
 
 plugins {
-    id 'java-library'                                  // exposes API
+    id 'java-library'
     id 'com.github.johnrengelman.shadow' version '7.1.2'
     id 'maven-publish'
 }
 
-group = findProperty('group') ?: 'com.github.Teenkung123'
-version = findProperty('version') ?: '1.0.0'           // JitPack can override with -Pversion
+group   = findProperty('group')   ?: 'com.github.Teenkung123'
+version = findProperty('version') ?: '1.0.0'   // JitPack will override with -Pversion
 
-java {
-    toolchain.languageVersion = JavaLanguageVersion.of(17)
-}
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 
 repositories {
     mavenCentral()
@@ -34,7 +32,7 @@ dependencies {
 }
 
 shadowJar {
-    archiveClassifier.set('')                           // make this the main jar
+    archiveClassifier.set('')                           // make shaded jar the main one
     dependencies {
         include(dependency('com.github.HologramLib:HologramLib:1.7.0'))
     }
@@ -45,14 +43,18 @@ tasks.register('sourcesJar', Jar) {
     from sourceSets.main.allSource
 }
 
+/* ----------  Maven‑publish wiring  ---------- */
 publishing {
     publications {
         mavenJava(MavenPublication) {
-            from components.shadow                     // publish the shaded jar
-            artifact(tasks.sourcesJar)                 // …plus sources
+            /* Publish the shaded jar */
+            artifact(tasks.shadowJar) { classifier = null }
+            /* Publish sources */
+            artifact(tasks.sourcesJar)
         }
     }
 }
+/* ------------------------------------------- */
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
