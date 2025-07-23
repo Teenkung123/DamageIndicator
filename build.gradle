@@ -47,14 +47,17 @@ publishing {
     publications {
         create("plugin", MavenPublication) {
             groupId    = project.group.toString()
-            artifactId = "DamageIndicator"              // constant, easy to depend on
+            artifactId = "DamageIndicator"
             version    = project.version.toString()
 
-            artifact(tasks.shadowJar)                   // shaded jar
-            artifact(tasks.sourcesJar)                  // optional sources
+            artifacts.clear()              // ←  THIS LINE REMOVES THE UNWANTED 'jar'
+
+            artifact(tasks.shadowJar)      // shaded plugin jar
+            artifact(tasks.sourcesJar)     // optional sources
         }
     }
 }
+
 /* --------------------------------------------------- */
 
 tasks.withType(JavaCompile).configureEach {
