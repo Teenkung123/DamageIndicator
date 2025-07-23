@@ -33,7 +33,7 @@ public final class DamageIndicator extends JavaPlugin {
 
     @Override
     public void onLoad() {
-        HologramLib.onLoad(this); /*Only needed if you shade HologramLib*/
+        HologramLib.onLoad(this);
     }
 
     @Override
