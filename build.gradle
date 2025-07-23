@@ -7,8 +7,8 @@ plugins {
     id 'maven-publish'
 }
 
-group   = findProperty('group')   ?: 'com.github.Teenkung123'
-version = findProperty('version') ?: '1.0.0'   // JitPack overrides with -Pversion
+group   = project.findProperty('group')   ?: 'com.github.Teenkung123'
+version = project.findProperty('version') ?: '1.0.0'   // JitPack passes -Pversion=v1.0.5 etc.
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 
@@ -33,10 +33,8 @@ dependencies {
 }
 
 shadowJar {
-    archiveClassifier.set('')                           // shaded JAR is the final plugin
-    dependencies {
-        include(dependency('com.github.HologramLib:HologramLib:1.7.0'))
-    }
+    archiveClassifier.set('')                           // main plugin jar
+    dependencies { include(dependency('com.github.HologramLib:HologramLib:1.7.0')) }
 }
 
 tasks.register('sourcesJar', Jar) {
@@ -44,18 +42,20 @@ tasks.register('sourcesJar', Jar) {
     from sourceSets.main.allSource
 }
 
-/* ----------  Maven‑publish wiring  ---------- */
+/* ----------  CLEAN, EXPLICIT PUBLICATION  ---------- */
 publishing {
     publications {
-        // configure the pre‑existing mavenJava publication
-        withType(MavenPublication).matching { it.name == 'mavenJava' }.all { pub ->
-            pub.artifacts.clear()                      // ⚠️ remove auto‑added regular JAR
-            pub.artifact tasks.shadowJar               // add shaded JAR
-            pub.artifact tasks.sourcesJar              // add sources
+        create("plugin", MavenPublication) {
+            groupId    = project.group.toString()
+            artifactId = "DamageIndicator"              // constant, easy to depend on
+            version    = project.version.toString()
+
+            artifact(tasks.shadowJar)                   // shaded jar
+            artifact(tasks.sourcesJar)                  // optional sources
         }
     }
 }
-/* ------------------------------------------- */
+/* --------------------------------------------------- */
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
@@ -65,7 +65,5 @@ tasks.withType(JavaCompile).configureEach {
 processResources {
     inputs.property('version', project.version)
     filteringCharset = 'UTF-8'
-    filesMatching('plugin.yml') {
-        expand(version: project.version)
-    }
+    filesMatching('plugin.yml') { expand(version: project.version) }
 }
