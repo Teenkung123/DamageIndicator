@@ -3,7 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/DamageIndicator.main.iml" filepath="$PROJECT_DIR$/.idea/modules/DamageIndicator.main.iml" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/modules/org.Teenkung123.DamageIndicator.main.iml" filepath="$PROJECT_DIR$/.idea/modules/org.Teenkung123.DamageIndicator.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/com.github.Teenkung123.DamageIndicator.main.iml" filepath="$PROJECT_DIR$/.idea/modules/com.github.Teenkung123.DamageIndicator.main.iml" />
     </modules>
   </component>
 </project>
