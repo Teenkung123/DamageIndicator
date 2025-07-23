@@ -15,12 +15,16 @@ import org.teenkung123.damageindicator.Events.VanillaEvent;
 import org.teenkung123.damageindicator.Loader.ConfigLoader;
 import org.teenkung123.damageindicator.Utils.HealthBarBatchUpdater;
 import org.teenkung123.damageindicator.Utils.HoloDisplays;
+import org.teenkung123.damageindicator.api.DamageIndicatorAPI;
+import org.teenkung123.damageindicator.manager.PlaceholderManager;
 
 public final class DamageIndicator extends JavaPlugin {
 
     private ConfigLoader configLoader;
     private HoloDisplays holoDisplays;
     private HealthBarBatchUpdater healthBarBatchUpdater;
+    private PlaceholderManager placeholderManager;
+    private DamageIndicatorAPI api;
     private boolean usePlaceholderAPI;
     private boolean useMythicMobs;
     private boolean useMyPet;
@@ -37,6 +41,8 @@ public final class DamageIndicator extends JavaPlugin {
         usePlaceholderAPI = Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI");
         useMythicMobs = Bukkit.getPluginManager().isPluginEnabled("MythicMobs");
         useMyPet = Bukkit.getPluginManager().isPluginEnabled("MyPet");
+        placeholderManager = new PlaceholderManager();
+        api = new DamageIndicatorAPI(this);
         HologramLib.getManager().ifPresentOrElse(
                 manager -> hologramManager = manager,
                 () -> getLogger().severe("Failed to initialize HologramLib manager.")
@@ -68,6 +74,8 @@ public final class DamageIndicator extends JavaPlugin {
     public boolean getUseMythicMobs() { return useMythicMobs; }
     public MythicBukkit getMythicBukkit() { return mythicBukkit; }
     public HealthBarBatchUpdater getHealthBarBatchUpdater() { return healthBarBatchUpdater; }
+    public PlaceholderManager getPlaceholderManager() { return placeholderManager; }
+    public DamageIndicatorAPI getApi() { return api; }
 
     public HologramManager getHologramManager() {
         return hologramManager;
@@ -77,7 +85,7 @@ public final class DamageIndicator extends JavaPlugin {
         if (healthBarBatchUpdater != null) healthBarBatchUpdater.stopBatchUpdating();
         this.reloadConfig();
         configLoader = new ConfigLoader(this);
-        holoDisplays = new HoloDisplays(this);
+        holoDisplays = new HoloDisplays(this, placeholderManager);
         healthBarBatchUpdater = new HealthBarBatchUpdater(this, configLoader, holoDisplays);
         if (useMythicMobs) {
             mythicBukkit = MythicBukkit.inst();

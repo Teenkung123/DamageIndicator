@@ -1,7 +1,6 @@
 package org.teenkung123.damageindicator.Utils;
 
 import com.maximde.hologramlib.hologram.TextHologram;
-import de.Keyle.MyPet.api.entity.MyPetBukkitEntity;
 import me.clip.placeholderapi.PlaceholderAPI;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -11,6 +10,7 @@ import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scoreboard.*;
 import org.teenkung123.damageindicator.DamageIndicator;
 import org.teenkung123.damageindicator.Loader.ConfigLoader;
+import org.teenkung123.damageindicator.manager.PlaceholderManager;
 
 import javax.annotation.Nullable;
 import java.text.DecimalFormat;
@@ -21,6 +21,7 @@ import java.util.regex.Pattern;
 public class HoloDisplays {
 
     private final DamageIndicator plugin;
+    private final PlaceholderManager placeholderManager;
     private final boolean useMythicMobs;
     private final boolean usePlaceholderAPI;
     private final Object mythicBukkit;
@@ -71,8 +72,9 @@ public class HoloDisplays {
     private static final int ORANGE = 0xFFA500;
     private static final int RED    = 0xFF0000;
 
-    public HoloDisplays(DamageIndicator plugin) {
+    public HoloDisplays(DamageIndicator plugin, PlaceholderManager placeholderManager) {
         this.plugin = plugin;
+        this.placeholderManager = placeholderManager;
         this.useMythicMobs = plugin.getUseMythicMobs();
         this.usePlaceholderAPI = plugin.getUsePlaceholderAPI();
         this.mythicBukkit = plugin.getMythicBukkit();
@@ -151,7 +153,8 @@ public class HoloDisplays {
         if (!currentSettings.enabled()) return;
 
         // Skip certain entities
-        if (plugin.getUseMyPet() && (entity instanceof MyPetBukkitEntity)) return;
+        if (plugin.getUseMyPet() &&
+                entity.getClass().getName().equals("de.Keyle.MyPet.api.entity.MyPetBukkitEntity")) return;
         if (entity.getType() == EntityType.ARMOR_STAND || entity instanceof Player
                 || !entity.getPassengers().isEmpty() || entity.hasMetadata("NPC")) {
             return;
@@ -283,6 +286,39 @@ public class HoloDisplays {
     }
 
     /**
+     * Displays a custom text indicator above an entity.
+     *
+     * @param entity target entity
+     * @param text   text to display
+     */
+    public void displayCustomIndicator(LivingEntity entity, String text) {
+        String mythicMobsType = getMythicMobType(entity);
+        HealthBarSettings currentSettings = customHealthBars.getOrDefault(mythicMobsType, defaultSettings);
+
+        String hologramId = "damageindicator_custom_" + ThreadLocalRandom.current().nextLong();
+
+        Location baseLoc = entity.getLocation().clone()
+                .add(0, entity.getHeight() + damageIndicatorHeightOffset, 0);
+
+        TextHologram holo = new TextHologram(hologramId)
+                .setUpdateTaskPeriod(1L)
+                .setViewRange(plugin.getConfigLoader().getHealthBarAlwaysVisibleDistance());
+        plugin.getHologramManager().spawn(holo, baseLoc);
+
+        String line = placeholderManager.applyPlaceholders(text, entity);
+        holo.setMiniMessageText(ColorTranslator.toMiniMessageFormat(line));
+
+        animateHologram(holo, entity, currentSettings);
+
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                plugin.getHologramManager().remove(hologramId);
+            }
+        }.runTaskLater(plugin, currentSettings.hologramDuration());
+    }
+
+    /**
      * Animate the indicator drifting up; no .update() calls needed
      * since setUpdateTaskPeriod(1L) handles it in the background.
      */
@@ -337,6 +373,7 @@ public class HoloDisplays {
             if (usePlaceholderAPI) {
                 line = PlaceholderAPI.setPlaceholders(null, line);
             }
+            line = placeholderManager.applyPlaceholders(line, entity);
             sb.append(line).append("\n");
         }
         // Trim trailing newline
