@@ -18,6 +18,8 @@ import org.teenkung123.damageindicator.Utils.HoloDisplays;
 import org.teenkung123.damageindicator.api.DamageIndicatorAPI;
 import org.teenkung123.damageindicator.manager.PlaceholderManager;
 
+import java.util.UUID;
+
 public final class DamageIndicator extends JavaPlugin {
 
     private ConfigLoader configLoader;
@@ -121,6 +123,12 @@ public final class DamageIndicator extends JavaPlugin {
             for (String holoId : hologramManager.getHologramIds()) {
                 if (holoId.startsWith("damageindicator_health_")) {
                     hologramManager.remove(holoId);
+                    try {
+                        UUID id = UUID.fromString(holoId.substring("damageindicator_health_".length()));
+                        Scoreboard board = Bukkit.getScoreboardManager().getMainScoreboard();
+                        Team team = board.getTeam("DamageIndicatorBars");
+                        if (team != null) team.removeEntry(id.toString());
+                    } catch (IllegalArgumentException ignored) {}
                 }
             }
         }, 20*300L, 20*300L);

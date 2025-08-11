@@ -142,6 +142,19 @@ public class HoloDisplays {
         }
     }
 
+    private void addToTeam(Entity entity) {
+        String key = entity.getUniqueId().toString();
+        if (!damageIndicatorTeam.hasEntry(key)) {
+            damageIndicatorTeam.addEntry(key);
+        }
+    }
+    private void removeFromTeam(UUID id) {
+        String key = id.toString();
+        if (damageIndicatorTeam.hasEntry(key)) {
+            damageIndicatorTeam.removeEntry(key);
+        }
+    }
+
     /**
      * Displays or refreshes the health bar hologram for an entity.
      * If the hologram doesn't exist, we create a new one with setUpdateTaskPeriod
@@ -180,6 +193,7 @@ public class HoloDisplays {
         }
 
         // Update text right away
+        addToTeam(entity);
         updateHealthHologram(healthHolo, entity, mythicMobsType);
 
         // Cancel any old scheduled removal or movement task
@@ -192,8 +206,10 @@ public class HoloDisplays {
             @Override
             public void run() {
                 if (!entity.isValid()) {
-                    // If entity is dead or invalid, remove the hologram
                     plugin.getHologramManager().remove(healthId);
+                    removeFromTeam(entity.getUniqueId());
+                    lastHealthTextMap.remove(entity.getUniqueId());
+                    lastTeleportLoc.remove(entity.getUniqueId());
                     cancel();
                     return;
                 }
@@ -328,7 +344,14 @@ public class HoloDisplays {
         final double zSpeed = damageIndicatorAnimationSpeed * Math.sin(angle);
         final double[] ySpeed = { damageIndicatorInitialYSpeed };
 
-        final Location loc = holo.getLocation().clone();
+        Location l = holo.getLocation();
+        if (l == null) {
+            l = entity.getLocation().clone()
+                    .add(0, entity.getHeight() + damageIndicatorHeightOffset, 0);
+        } else {
+            l = l.clone();
+        }
+        final Location loc = l;
         new BukkitRunnable() {
             int ticks = 0;
             @Override
@@ -368,7 +391,8 @@ public class HoloDisplays {
                     .replace("<max_health>", TWO_DECIMAL_FORMAT.format(maxHealth))
                     .replace("<bar>", createHealthBar(currentHealth, maxHealth, mobType, false))
                     .replace("<hp_percent>", TWO_DECIMAL_FORMAT.format((currentHealth / maxHealth) * 100))
-                    .replace("<hp_percent_bar>", createHealthBar(currentHealth, maxHealth, mobType, true));
+                    .replace("<hp_percent_bar>", createHealthBar(currentHealth, maxHealth, mobType, true))
+                    .replace("<dynamic>", getPiecewiseGradientColor(currentHealth / maxHealth));
 
             if (usePlaceholderAPI) {
                 line = PlaceholderAPI.setPlaceholders(null, line);
